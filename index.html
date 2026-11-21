@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Catálogo de Series - Vercel</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f4f6f9; color: #1f2328; }
+    h1 { margin-bottom: 16px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+    .card { background: #fff; border: 1px solid #d0d7de; border-radius: 8px; padding: 16px; }
+    h2 { margin-top: 0; font-size: 18px; }
+    input, select, textarea, button {
+      width: 100%; box-sizing: border-box; padding: 8px; margin: 5px 0;
+      border: 1px solid #8c959f; border-radius: 4px; font-family: inherit;
+    }
+    button { width: auto; cursor: pointer; background: #f6f8fa; margin-right: 4px; }
+    button:hover { background: #eaeef2; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+    th, td { border: 1px solid #d0d7de; padding: 6px; text-align: left; vertical-align: top; }
+    th { background: #f6f8fa; }
+  </style>
+</head>
+<body>
+  <h1>Catálogo de Series, Plataformas y Valoraciones</h1>
+
+  <div class="grid">
+    <!-- CRUD PLATAFORMAS -->
+    <div class="card">
+      <h2>1. Plataformas (CRUD)</h2>
+      <form id="formPlataforma">
+        <input type="hidden" id="platId" />
+        <input type="text" id="platNombre" placeholder="Nombre de la plataforma (ej. Netflix)" required />
+        <button type="submit" id="btnGuardarPlat">Guardar Plataforma</button>
+        <button type="button" id="btnCancelarPlat" style="display:none;">Cancelar</button>
+      </form>
+      <table>
+        <thead>
+          <tr><th>Nombre</th><th>Acciones</th></tr>
+        </thead>
+        <tbody id="tbodyPlataformas"></tbody>
+      </table>
+    </div>
+
+    <!-- CRUD SERIES -->
+    <div class="card">
+      <h2>2. Series (CRUD)</h2>
+      <form id="formSerie">
+        <input type="hidden" id="serieId" />
+        <select id="seriePlataforma" required></select>
+        <input type="text" id="serieNombre" placeholder="Nombre de la serie" required />
+        <button type="submit" id="btnGuardarSerie">Guardar Serie</button>
+        <button type="button" id="btnCancelarSerie" style="display:none;">Cancelar</button>
+      </form>
+      <table>
+        <thead>
+          <tr><th>Serie</th><th>Plataforma</th><th>Acciones</th></tr>
+        </thead>
+        <tbody id="tbodySeries"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- CRUD VALORACIONES -->
+  <div class="card" style="margin-top: 20px;">
+    <h2>3. Valoraciones (CRUD)</h2>
+    <form id="formValoracion">
+      <input type="hidden" id="valId" />
+      <div class="grid">
+        <div>
+          <label>Plataforma</label>
+          <select id="valPlataforma" required></select>
+        </div>
+        <div>
+          <label>Serie</label>
+          <select id="valSerie" required></select>
+        </div>
+        <div>
+          <label>Puntaje (1 a 10)</label>
+          <input type="number" id="valPuntaje" min="1" max="10" step="0.1" placeholder="Ej. 8.5" required />
+        </div>
+      </div>
+      <label>Observación</label>
+      <textarea id="valObservacion" rows="2" placeholder="Escribe una observación en formato de texto..." required></textarea>
+      <button type="submit" id="btnGuardarVal">Guardar Valoración</button>
+      <button type="button" id="btnCancelarVal" style="display:none;">Cancelar</button>
+    </form>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Plataforma</th>
+          <th>Serie</th>
+          <th>Puntaje</th>
+          <th>Observación</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="tbodyValoraciones"></tbody>
+    </table>
+  </div>
+
+  <script>
+    const KEY = 'series_catalogacion_7a_v1';
+    const inicial = {
+      plataformas: [
+        { id: 1, nombre: 'Netflix' },
+        { id: 2, nombre: 'HBO / Max' }
+      ],
+      series: [
+        { id: 1, nombre: 'Dark', plataformaId: 1 },
+        { id: 2, nombre: 'Chernobyl', plataformaId: 2 }
+      ],
+      valoraciones: []
+    };
+
+    let db = JSON.parse(localStorage.getItem(KEY)) || JSON.parse(JSON.stringify(inicial));
+
+    function save() {
+      localStorage.setItem(KEY, JSON.stringify(db));
+    }
+
+    function getPlatNombre(id) {
+      const p = db.plataformas.find(x => x.id === Number(id));
+      return p ? p.nombre : '(Sin plataforma)';
+    }
+
+    function getSerieNombre(id) {
+      const s = db.series.find(x => x.id === Number(id));
+      return s ? s.nombre : '(Sin serie)';
+    }
+
+    function renderAll() {
+      renderPlataformas();
+      renderSeries();
+      renderValoraciones();
+    }
+
+    // --- PLATAFORMAS ---
+    function renderPlataformas() {
+      const tbody = document.getElementById('tbodyPlataformas');
+      const selSeriePlat = document.getElementById('seriePlataforma');
+      const selValPlat = document.getElementById('valPlataforma');
+      tbody.innerHTML = '';
+      selSeriePlat.innerHTML = '';
+      selValPlat.innerHTML = '';
+
+      db.plataformas.forEach(p => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${p.nombre}</td>
+          <td>
+            <button onclick="editarPlataforma(${p.id})">Editar</button>
+            <button onclick="eliminarPlataforma(${p.id})">Eliminar</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+
+        const opt1 = new Option(p.nombre, p.id);
+        const opt2 = new Option(p.nombre, p.id);
+        selSeriePlat.add(opt1);
+        selValPlat.add(opt2);
+      });
+
+      poblarSelectSeriesPorPlataforma();
+    }
+
+    function editarPlataforma(id) {
+      const p = db.plataformas.find(x => x.id === id);
+      if (!p) return;
+      document.getElementById('platId').value = p.id;
+      document.getElementById('platNombre').value = p.nombre;
+      document.getElementById('btnGuardarPlat').textContent = 'Actualizar Plataforma';
+      document.getElementById('btnCancelarPlat').style.display = 'inline';
+    }
+
+    function eliminarPlataforma(id) {
+      db.plataformas = db.plataformas.filter(x => x.id !== id);
+      save();
+      renderAll();
+    }
+
+    document.getElementById('btnCancelarPlat').addEventListener('click', () => {
+      document.getElementById('platId').value = '';
+      document.getElementById('platNombre').value = '';
+      document.getElementById('btnGuardarPlat').textContent = 'Guardar Plataforma';
+      document.getElementById('btnCancelarPlat').style.display = 'none';
+    });
+
+    document.getElementById('formPlataforma').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const id = Number(document.getElementById('platId').value);
+      const nombre = document.getElementById('platNombre').value.trim();
+      if (!nombre) return;
+
+      if (id) {
+        const p = db.plataformas.find(x => x.id === id);
+        if (p) p.nombre = nombre;
+      } else {
+        const nuevoId = db.plataformas.length ? Math.max(...db.plataformas.map(x => x.id)) + 1 : 1;
+        db.plataformas.push({ id: nuevoId, nombre });
+      }
+
+      document.getElementById('btnCancelarPlat').click();
+      save();
+      renderAll();
+    });
+
+    // --- SERIES ---
+    function renderSeries() {
+      const tbody = document.getElementById('tbodySeries');
+      tbody.innerHTML = '';
+
+      db.series.forEach(s => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${s.nombre}</td>
+          <td>${getPlatNombre(s.plataformaId)}</td>
+          <td>
+            <button onclick="editarSerie(${s.id})">Editar</button>
+            <button onclick="eliminarSerie(${s.id})">Eliminar</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      poblarSelectSeriesPorPlataforma();
+    }
+
+    function editarSerie(id) {
+      const s = db.series.find(x => x.id === id);
+      if (!s) return;
+      document.getElementById('serieId').value = s.id;
+      document.getElementById('seriePlataforma').value = s.plataformaId;
+      document.getElementById('serieNombre').value = s.nombre;
+      document.getElementById('btnGuardarSerie').textContent = 'Actualizar Serie';
+      document.getElementById('btnCancelarSerie').style.display = 'inline';
+    }
+
+    function eliminarSerie(id) {
+      db.series = db.series.filter(x => x.id !== id);
+      save();
+      renderAll();
+    }
+
+    document.getElementById('btnCancelarSerie').addEventListener('click', () => {
+      document.getElementById('serieId').value = '';
+      document.getElementById('serieNombre').value = '';
+      document.getElementById('btnGuardarSerie').textContent = 'Guardar Serie';
+      document.getElementById('btnCancelarSerie').style.display = 'none';
+    });
+
+    document.getElementById('formSerie').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const id = Number(document.getElementById('serieId').value);
+      const plataformaId = Number(document.getElementById('seriePlataforma').value);
+      const nombre = document.getElementById('serieNombre').value.trim();
+      if (!nombre || !plataformaId) return;
+
+      if (id) {
+        const s = db.series.find(x => x.id === id);
+        if (s) { s.nombre = nombre; s.plataformaId = plataformaId; }
+      } else {
+        const nuevoId = db.series.length ? Math.max(...db.series.map(x => x.id)) + 1 : 1;
+        db.series.push({ id: nuevoId, nombre, plataformaId });
+      }
+
+      document.getElementById('btnCancelarSerie').click();
+      save();
+      renderAll();
+    });
+
+    // --- VALORACIONES ---
+    function poblarSelectSeriesPorPlataforma(serieSeleccionadaId = null) {
+      const platId = Number(document.getElementById('valPlataforma').value);
+      const selSerie = document.getElementById('valSerie');
+      selSerie.innerHTML = '';
+
+      const filtradas = db.series.filter(s => s.plataformaId === platId);
+      const lista = filtradas.length ? filtradas : db.series;
+
+      lista.forEach(s => {
+        const opt = new Option(`${s.nombre} (${getPlatNombre(s.plataformaId)})`, s.id);
+        selSerie.add(opt);
+      });
+
+      if (serieSeleccionadaId) {
+        selSerie.value = serieSeleccionadaId;
+      }
+    }
+
+    document.getElementById('valPlataforma').addEventListener('change', () => {
+      poblarSelectSeriesPorPlataforma();
+    });
+
+    function renderValoraciones() {
+      const tbody = document.getElementById('tbodyValoraciones');
+      tbody.innerHTML = '';
+
+      db.valoraciones.forEach(v => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${getPlatNombre(v.plataformaId)}</td>
+          <td>${getSerieNombre(v.serieId)}</td>
+          <td>${v.puntaje}</td>
+          <td>${v.observacion}</td>
+          <td>
+            <button onclick="editarValoracion(${v.id})">Editar</button>
+            <button onclick="eliminarValoracion(${v.id})">Eliminar</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function editarValoracion(id) {
+      const v = db.valoraciones.find(x => x.id === id);
+      if (!v) return;
+      document.getElementById('valId').value = v.id;
+      document.getElementById('valPlataforma').value = v.plataformaId;
+      poblarSelectSeriesPorPlataforma(v.serieId);
+      document.getElementById('valPuntaje').value = v.puntaje;
+      document.getElementById('valObservacion').value = v.observacion;
+      document.getElementById('btnGuardarVal').textContent = 'Actualizar Valoración';
+      document.getElementById('btnCancelarVal').style.display = 'inline';
+    }
+
+    function eliminarValoracion(id) {
+      db.valoraciones = db.valoraciones.filter(x => x.id !== id);
+      save();
+      renderValoraciones();
+    }
+
+    document.getElementById('btnCancelarVal').addEventListener('click', () => {
+      document.getElementById('valId').value = '';
+      document.getElementById('valPuntaje').value = '';
+      document.getElementById('valObservacion').value = '';
+      document.getElementById('btnGuardarVal').textContent = 'Guardar Valoración';
+      document.getElementById('btnCancelarVal').style.display = 'none';
+    });
+
+    document.getElementById('formValoracion').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const id = Number(document.getElementById('valId').value);
+      const plataformaId = Number(document.getElementById('valPlataforma').value);
+      const serieId = Number(document.getElementById('valSerie').value);
+      const puntaje = Number(document.getElementById('valPuntaje').value);
+      const observacion = document.getElementById('valObservacion').value.trim();
+      if (!observacion || isNaN(puntaje)) return;
+
+      if (id) {
+        const v = db.valoraciones.find(x => x.id === id);
+        if (v) { v.plataformaId = plataformaId; v.serieId = serieId; v.puntaje = puntaje; v.observacion = observacion; }
+      } else {
+        const nuevoId = db.valoraciones.length ? Math.max(...db.valoraciones.map(x => x.id)) + 1 : 1;
+        db.valoraciones.push({ id: nuevoId, plataformaId, serieId, puntaje, observacion });
+      }
+
+      document.getElementById('btnCancelarVal').click();
+      save();
+      renderValoraciones();
+    });
+
+    renderAll();
+  </script>
+</body>
+</html>
